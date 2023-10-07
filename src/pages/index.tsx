@@ -1,118 +1,207 @@
-import Image from 'next/image'
-import { Inter } from 'next/font/google'
+import { Inter } from "next/font/google";
+import prisma, { drink, liquor_list, user } from "@/lib/prisma";
+import { GetServerSideProps, NextPage } from "next";
+import { Layout } from "@/components/pages/Layout";
+import { useState } from "react";
+import { CiCircleRemove } from "react-icons/ci";
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ["latin"] });
+type DrinkWithISOString = Omit<drink, "drank_at"> & {
+  drank_at: string;
+};
 
-export default function Home() {
+type Props = {
+  user: user[];
+  liquor_list: liquor_list[];
+  drink: DrinkWithISOString[];
+};
+
+export const getServerSideProps: GetServerSideProps<Props> = async () => {
+  const [user, liquor_list, drink] = await Promise.all([
+    prisma.user.findMany(),
+    prisma.liquor_list.findMany(),
+    prisma.drink.findMany({
+      take: 50,
+      orderBy: {
+        drank_at: "desc",
+      },
+    }),
+  ]);
+  return {
+    props: {
+      user,
+      liquor_list,
+      drink: drink.map((d) => ({
+        ...d,
+        drank_at: d.drank_at.toISOString().split("T")[0].replaceAll("-", "/"),
+      })),
+    },
+  };
+};
+
+const Home: NextPage<Props> = ({ user, liquor_list, drink }) => {
+  const [drinkList, setDrinkList] = useState<DrinkWithISOString[]>(drink);
+  const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [selectUser, setSelectUser] = useState<number>(user[0].id);
+  const [selectLiquor, setSelectLiquor] = useState<number>(liquor_list[0].id);
+  const [breakDownUser, setBreakDownUser] = useState<number | null>(null);
+
+  const displayName = user.find((u) => u.id === breakDownUser)?.name;
+
+  const handleBreakdown = (userId: number) => {
+    setBreakDownUser(userId);
+    setIsOpen(true);
+  };
+
+  const handleEnter = async () => {
+    const body = {
+      user_id: selectUser,
+      liquor_id: selectLiquor,
+    };
+
+    try {
+      await fetch("/api/drink/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      await drinkListUpdate();
+    } catch (e) {
+      console.log(e);
+      alert("登録に失敗しました");
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await fetch("/api/drink/delete", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id }),
+      });
+      await drinkListUpdate();
+    } catch (e) {
+      alert("削除に失敗しました");
+    }
+  };
+
+  const drinkListUpdate = async () => {
+    const res = await fetch("/api/drink/list", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    const drinkList = await res.json();
+    setDrinkList(drinkList.data);
+  };
+
   return (
-    <main
-      className={`flex min-h-screen flex-col items-center justify-between p-24 ${inter.className}`}
-    >
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/pages/index.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <Layout>
+      <div className="w-full mt-16 rounded-lg overflow-hidden shadow-lg bg-slate-400 p-6">
+        <h2 className="font-bold text-xl mb-4 text-center">今の結果</h2>
+        <div className="flex flex-col">
+          {user.map((user) => (
+            <div
+              key={user.id}
+              className="flex justify-between items-center py-4"
+            >
+              <div>
+                <p className="ml-4 text-gray-700 text-base">{user.name}</p>
+              </div>
+              <div className="flex flex-row items-center gap-8">
+                <p className="text-gray-700 text-base">{user.count}</p>
+                <button
+                  className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 border border-blue-700 rounded"
+                  onClick={() => handleBreakdown(user.id)}
+                >
+                  内訳
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700/10 after:dark:from-sky-900 after:dark:via-[#0141ff]/40 before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
+      <div className="w-full mt-16 rounded-lg overflow-hidden shadow-lg bg-slate-400 p-6">
+        <div className="flex flex-row justify-between items-center py-4">
+          <h2 className="ml-2 font-bold text-xl text-center">飲んだお酒登録</h2>
+          <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 border border-blue-700 rounded">
+            お酒を登録
+          </button>
+        </div>
+        <select
+          className="w-full mt-8 appearance-none bg-gray-200 rounded px-4 py-2 border border-gray-200 text-gray-700 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
+          onChange={(e) => setSelectLiquor(Number(e.target.value))}
+        >
+          {liquor_list.map((liquor) => (
+            <option key={liquor.id} value={liquor.id}>
+              {liquor.name}
+            </option>
+          ))}
+        </select>
+        <select
+          className="w-full mt-8 appearance-none bg-gray-200 rounded px-4 py-2 border border-gray-200 text-gray-700 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
+          onChange={(e) => setSelectUser(Number(e.target.value))}
+        >
+          {user.map((user) => (
+            <option key={user.id} value={user.id}>
+              {user.name}
+            </option>
+          ))}
+        </select>
+        <div className="flex justify-center mt-8">
+          <button
+            className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 border border-blue-700 rounded"
+            onClick={() => handleEnter()}
+          >
+            登録
+          </button>
+        </div>
       </div>
 
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
+      <h2 className="font-bold text-xl mt-16 text-center">
+        飲んだお酒内訳: {displayName}
+      </h2>
+      {isOpen &&
+        drinkList.map((drink) => {
+          if (drink.user_id !== breakDownUser) return;
+          const drinkName = liquor_list.find((l) => l.id === drink.liquor_id);
+          return (
+            <div
+              key={drink.id}
+              className="w-full mt-8 rounded-lg overflow-hidden shadow-lg bg-slate-400 p-6"
+            >
+              <div className="flex items-center justify-between py-4">
+                <div className="ml-4">
+                  <p className="text-gray-700 text-lg font-bold">
+                    {drinkName?.name} key: {drink.id}
+                  </p>
+                  <div className="flex flex-row items-center mt-2">
+                    <p className="text-gray-700 text-sm">飲んだ日:</p>
+                    <p className="ml-2 text-gray-700 font-bold">
+                      {drink.drank_at}
+                    </p>
+                  </div>
+                </div>
+                <div className="mr-4">
+                  <CiCircleRemove
+                    className="hover: cursor-pointer"
+                    size="42px"
+                    color="red"
+                    onClick={() => handleDelete(drink.id)}
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+    </Layout>
+  );
+};
 
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Discover and deploy boilerplate example Next.js&nbsp;projects.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
-  )
-}
+export default Home;
