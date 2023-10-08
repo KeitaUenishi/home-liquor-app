@@ -27,6 +27,5 @@ model liquor_list {
 model user {
   id    Int     @id(map: "User_pkey") @default(autoincrement())
   name  String
-  count Int?    @default(0)
   drink drink[]
 }
