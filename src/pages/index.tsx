@@ -4,6 +4,7 @@ import { GetServerSideProps, NextPage } from "next";
 import { Layout } from "@/components/pages/Layout";
 import { useState } from "react";
 import { CiCircleRemove } from "react-icons/ci";
+import Modal from "@/components/ui/Modal";
 
 const inter = Inter({ subsets: ["latin"] });
 type DrinkWithISOString = Omit<drink, "drank_at"> & {
@@ -21,7 +22,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async () => {
     prisma.user.findMany(),
     prisma.liquor_list.findMany(),
     prisma.drink.findMany({
-      take: 50,
       orderBy: {
         drank_at: "desc",
       },
@@ -45,6 +45,7 @@ const Home: NextPage<Props> = ({ user, liquor_list, drink }) => {
   const [selectUser, setSelectUser] = useState<number>(user[0].id);
   const [selectLiquor, setSelectLiquor] = useState<number>(liquor_list[0].id);
   const [breakDownUser, setBreakDownUser] = useState<number | null>(null);
+  const [showModal, setShowModal] = useState<boolean>(false);
 
   const displayName = user.find((u) => u.id === breakDownUser)?.name;
 
@@ -114,7 +115,10 @@ const Home: NextPage<Props> = ({ user, liquor_list, drink }) => {
                 <p className="ml-4 text-gray-700 text-base">{user.name}</p>
               </div>
               <div className="flex flex-row items-center gap-8">
-                <p className="text-gray-700 text-base">{user.count}</p>
+                <p className="text-gray-700 text-base">
+                  借金: {drinkList.filter((d) => d.user_id === user.id).length}
+                </p>
+
                 <button
                   className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 border border-blue-700 rounded"
                   onClick={() => handleBreakdown(user.id)}
@@ -130,7 +134,10 @@ const Home: NextPage<Props> = ({ user, liquor_list, drink }) => {
       <div className="w-full mt-16 rounded-lg overflow-hidden shadow-lg bg-slate-400 p-6">
         <div className="flex flex-row justify-between items-center py-4">
           <h2 className="ml-2 font-bold text-xl text-center">飲んだお酒登録</h2>
-          <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 border border-blue-700 rounded">
+          <button
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 border border-blue-700 rounded"
+            onClick={() => setShowModal(true)}
+          >
             お酒を登録
           </button>
         </div>
@@ -179,7 +186,7 @@ const Home: NextPage<Props> = ({ user, liquor_list, drink }) => {
               <div className="flex items-center justify-between py-4">
                 <div className="ml-4">
                   <p className="text-gray-700 text-lg font-bold">
-                    {drinkName?.name} key: {drink.id}
+                    {drinkName?.name}
                   </p>
                   <div className="flex flex-row items-center mt-2">
                     <p className="text-gray-700 text-sm">飲んだ日:</p>
@@ -200,6 +207,8 @@ const Home: NextPage<Props> = ({ user, liquor_list, drink }) => {
             </div>
           );
         })}
+
+      <Modal showModal={showModal} setShowModal={setShowModal} />
     </Layout>
   );
 };
